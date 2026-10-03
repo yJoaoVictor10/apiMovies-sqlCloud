@@ -1,5 +1,7 @@
 # API Movies
 
+Link do vídeo: TO DO
+
 ## Descrição da Solução
 
 A **API Movies** é uma aplicação REST desenvolvida em **Java com Spring Boot** para o gerenciamento de filmes e suas respectivas categorias.
@@ -452,31 +454,518 @@ Os endpoints podem ser testados utilizando Insomnia, Postman ou outro cliente HT
 
 Exemplo:
 
+# Requisições CRUD — Insomnia
+
+A API pode ser testada utilizando o **Insomnia** através da URL publicada no Azure App Service.
+
+## URL Base
+
+```text
+https://movies-rm563409.azurewebsites.net
+```
+
+A API possui dois recursos principais:
+
+- `categories` — gerenciamento de categorias;
+- `movies` — gerenciamento de filmes.
+
+---
+
+# 1. CRUD de Categories
+
+## 1.1. Criar uma categoria — POST
+
+### Requisição
+
+```http
+POST https://movies-rm563409.azurewebsites.net/categories
+```
+
+### Body
+
+Selecione no Insomnia:
+
+```text
+Body → JSON
+```
+
+Utilize:
+
+```json
+{
+  "name": "Ação"
+}
+```
+
+### Resposta esperada
+
+**Status: `201 Created`**
+
+Exemplo:
+
+```json
+{
+  "id": 1,
+  "name": "Ação"
+}
+```
+
+---
+
+## 1.2. Listar todas as categorias — GET
+
+### Requisição
+
 ```http
 GET https://movies-rm563409.azurewebsites.net/categories
 ```
 
-E:
+### Resposta esperada
+
+**Status: `200 OK`**
+
+Exemplo:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Ação"
+  }
+]
+```
+
+---
+
+## 1.3. Buscar categoria por ID — GET
+
+### Requisição
+
+```http
+GET https://movies-rm563409.azurewebsites.net/categories/1
+```
+
+### Resposta esperada
+
+**Status: `200 OK`**
+
+Exemplo:
+
+```json
+{
+  "id": 1,
+  "name": "Ação"
+}
+```
+
+Caso o ID informado não exista:
+
+```http
+GET https://movies-rm563409.azurewebsites.net/categories/999
+```
+
+### Resposta esperada
+
+```text
+404 Not Found
+```
+
+---
+
+## 1.4. Atualizar uma categoria — PUT
+
+### Requisição
+
+```http
+PUT https://movies-rm563409.azurewebsites.net/categories/1
+```
+
+### Body
+
+```json
+{
+  "name": "Ação e Aventura"
+}
+```
+
+### Resposta esperada
+
+**Status: `200 OK`**
+
+Exemplo:
+
+```json
+{
+  "id": 1,
+  "name": "Ação e Aventura"
+}
+```
+
+---
+
+## 1.5. Excluir uma categoria — DELETE
+
+### Requisição
+
+```http
+DELETE https://movies-rm563409.azurewebsites.net/categories/1
+```
+
+### Resposta esperada
+
+```text
+204 No Content
+```
+
+> Uma categoria que possui filmes associados não pode ser excluída. Nesse caso, a API retorna `409 Conflict`.
+
+Exemplo:
+
+```text
+409 Conflict
+```
+
+A categoria deve ser excluída somente após os filmes associados serem removidos ou alterados para outra categoria.
+
+---
+
+# 2. CRUD de Movies
+
+Antes de cadastrar um filme, é necessário possuir uma categoria cadastrada, pois cada filme deve estar associado a uma categoria.
+
+Por exemplo, considerando a categoria:
+
+```json
+{
+  "id": 1,
+  "name": "Ação"
+}
+```
+
+podemos cadastrar um filme utilizando o `id` dessa categoria.
+
+---
+
+## 2.1. Criar um filme — POST
+
+### Requisição
+
+```http
+POST https://movies-rm563409.azurewebsites.net/movies
+```
+
+### Body
+
+Selecione no Insomnia:
+
+```text
+Body → JSON
+```
+
+Utilize:
+
+```json
+{
+  "title": "Matrix",
+  "synopsis": "Um programador descobre a verdade sobre sua realidade.",
+  "rating": 10,
+  "releaseDate": "1999-03-31",
+  "category": {
+    "id": 1
+  }
+}
+```
+
+### Resposta esperada
+
+**Status: `201 Created`**
+
+Exemplo:
+
+```json
+{
+  "id": 1,
+  "title": "Matrix",
+  "synopsis": "Um programador descobre a verdade sobre sua realidade.",
+  "rating": 10,
+  "releaseDate": "1999-03-31",
+  "category": {
+    "id": 1,
+    "name": "Ação"
+  }
+}
+```
+
+---
+
+## 2.2. Listar todos os filmes — GET
+
+### Requisição
 
 ```http
 GET https://movies-rm563409.azurewebsites.net/movies
 ```
 
-A partir deste momento, as requisições não dependem mais da execução da aplicação em `localhost`.
+### Resposta esperada
 
-O fluxo passa a ser:
+**Status: `200 OK`**
+
+Exemplo:
+
+```json
+[
+  {
+    "id": 1,
+    "title": "Matrix",
+    "synopsis": "Um programador descobre a verdade sobre sua realidade.",
+    "rating": 10,
+    "releaseDate": "1999-03-31",
+    "category": {
+      "id": 1,
+      "name": "Ação"
+    }
+  }
+]
+```
+
+---
+
+## 2.3. Buscar filme por ID — GET
+
+### Requisição
+
+```http
+GET https://movies-rm563409.azurewebsites.net/movies/1
+```
+
+### Resposta esperada
+
+**Status: `200 OK`**
+
+Exemplo:
+
+```json
+{
+  "id": 1,
+  "title": "Matrix",
+  "synopsis": "Um programador descobre a verdade sobre sua realidade.",
+  "rating": 10,
+  "releaseDate": "1999-03-31",
+  "category": {
+    "id": 1,
+    "name": "Ação"
+  }
+}
+```
+
+Caso o ID não exista:
+
+```http
+GET https://movies-rm563409.azurewebsites.net/movies/999
+```
+
+### Resposta esperada
 
 ```text
-Cliente HTTP
-    ↓
-Azure Web App
-    ↓
-Spring Boot
-    ↓
-JPA / Hibernate
-    ↓
-Azure SQL Database
+404 Not Found
 ```
+
+---
+
+## 2.4. Atualizar um filme — PUT
+
+Antes deste exemplo, considere que exista outra categoria:
+
+```json
+{
+  "id": 2,
+  "name": "Ficção Científica"
+}
+```
+
+### Requisição
+
+```http
+PUT https://movies-rm563409.azurewebsites.net/movies/1
+```
+
+### Body
+
+```json
+{
+  "title": "Matrix",
+  "synopsis": "Um hacker descobre que a realidade em que vive é uma simulação.",
+  "rating": 9,
+  "releaseDate": "1999-03-31",
+  "category": {
+    "id": 2
+  }
+}
+```
+
+### Resposta esperada
+
+**Status: `200 OK`**
+
+Exemplo:
+
+```json
+{
+  "id": 1,
+  "title": "Matrix",
+  "synopsis": "Um hacker descobre que a realidade em que vive é uma simulação.",
+  "rating": 9,
+  "releaseDate": "1999-03-31",
+  "category": {
+    "id": 2,
+    "name": "Ficção Científica"
+  }
+}
+```
+
+---
+
+## 2.5. Excluir um filme — DELETE
+
+### Requisição
+
+```http
+DELETE https://movies-rm563409.azurewebsites.net/movies/1
+```
+
+### Resposta esperada
+
+```text
+204 No Content
+```
+
+Após a exclusão, uma nova consulta:
+
+```http
+GET https://movies-rm563409.azurewebsites.net/movies/1
+```
+
+deverá retornar:
+
+```text
+404 Not Found
+```
+
+---
+
+# 3. Validações da API
+
+Além das operações CRUD, a API realiza validações relacionadas à associação entre filmes e categorias.
+
+## 3.1. Cadastrar filme sem categoria
+
+### Requisição
+
+```http
+POST https://movies-rm563409.azurewebsites.net/movies
+```
+
+### Body
+
+```json
+{
+  "title": "Matrix",
+  "synopsis": "Um programador descobre a verdade sobre sua realidade.",
+  "rating": 10,
+  "releaseDate": "1999-03-31"
+}
+```
+
+### Resposta esperada
+
+```text
+400 Bad Request
+```
+
+A categoria é obrigatória para o cadastro de um filme.
+
+---
+
+## 3.2. Cadastrar filme com categoria inexistente
+
+### Requisição
+
+```http
+POST https://movies-rm563409.azurewebsites.net/movies
+```
+
+### Body
+
+```json
+{
+  "title": "Matrix",
+  "synopsis": "Um programador descobre a verdade sobre sua realidade.",
+  "rating": 10,
+  "releaseDate": "1999-03-31",
+  "category": {
+    "id": 999
+  }
+}
+```
+
+### Resposta esperada
+
+```text
+404 Not Found
+```
+
+A API não permite associar um filme a uma categoria inexistente.
+
+---
+
+## 3.3. Excluir categoria que possui filmes
+
+Caso uma categoria esteja associada a um ou mais filmes:
+
+```http
+DELETE https://movies-rm563409.azurewebsites.net/categories/1
+```
+
+### Resposta esperada
+
+```text
+409 Conflict
+```
+
+A categoria somente poderá ser excluída após não possuir mais filmes associados.
+
+---
+
+# 4. Ordem recomendada para demonstração do CRUD
+
+Para demonstrar corretamente o relacionamento entre as entidades, recomenda-se executar as operações na seguinte ordem:
+
+```text
+1. POST   /categories
+2. GET    /categories
+3. GET    /categories/{id}
+4. PUT    /categories/{id}
+
+5. POST   /movies
+6. GET    /movies
+7. GET    /movies/{id}
+8. PUT    /movies/{id}
+
+9. DELETE /movies/{id}
+10. DELETE /categories/{id}
+```
+
+Após as operações de criação, atualização e exclusão, os dados podem ser conferidos diretamente no Azure SQL Database utilizando:
+
+```sql
+SELECT * FROM category;
+```
+
+```sql
+SELECT * FROM movie;
+```
+
+Dessa forma, é possível validar que as operações realizadas através da API estão sendo persistidas corretamente no Azure SQL Database.
 
 ---
 
@@ -618,6 +1107,5 @@ As áreas de monitoramento podem ser utilizadas para analisar:
 Após a conclusão do processo, a arquitetura da solução é:
 
 <img width="1774" height="887" alt="Arquitetura Azure para API Spring Boot" src="https://github.com/user-attachments/assets/6dc9cb0f-95b3-48c1-ae28-9bf6d89c3019" />
-
 
 Todos os principais componentes da solução são executados em serviços da Microsoft Azure, enquanto as credenciais utilizadas pela aplicação são fornecidas através das configurações do Azure Web App e não ficam armazenadas diretamente no código-fonte.
