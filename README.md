@@ -44,3 +44,580 @@ A API possui dois recursos principais:
 - **Movies:** gerenciamento dos filmes e associação de cada filme a uma categoria.
 
 Com essa arquitetura, a solução mantém a aplicação e o banco de dados hospedados na plataforma Microsoft Azure, permitindo acesso remoto à API, persistência dos dados em nuvem e monitoramento dos serviços.
+
+# How-To — Implantação da API Movies na Microsoft Azure
+
+Este documento apresenta o passo a passo para criação da infraestrutura, configuração do banco de dados, implantação da aplicação Spring Boot e configuração do monitoramento utilizando Microsoft Azure.
+
+A solução utiliza os seguintes serviços:
+
+- Azure Resource Group
+- Azure SQL Server
+- Azure SQL Database
+- Azure App Service Plan
+- Azure Web App
+- Azure Application Insights
+- Azure CLI
+
+A aplicação foi desenvolvida utilizando Java 17, Spring Boot, Spring Data JPA e Hibernate.
+
+---
+
+## 1. Pré-requisitos
+
+Antes de iniciar a implantação, é necessário possuir:
+
+- Uma conta Microsoft Azure ativa;
+- Azure CLI;
+- Java 17;
+- Maven;
+- PowerShell com `Invoke-Sqlcmd`, caso a criação das tabelas seja realizada por ele;
+- Projeto Spring Boot compilando corretamente.
+
+Realize a autenticação no Azure CLI:
+
+```bash
+az login
+```
+
+Verifique a assinatura ativa:
+
+```bash
+az account show --output table
+```
+
+---
+
+# 2. Criação do Resource Group
+
+Execute no Azure Cloud Shell:
+
+```bash
+az group create \
+  --name rg-sql-563409 \
+  --location chilecentral
+```
+
+O Resource Group `rg-sql-563409` será utilizado para armazenar os recursos da solução.
+
+---
+
+# 3. Registrar o provider do Azure SQL
+
+Execute:
+
+```bash
+az provider register --namespace Microsoft.Sql
+```
+
+O comando registra o provider necessário para criação e gerenciamento dos recursos do Azure SQL.
+
+---
+
+# 4. Criar o Azure SQL Server
+
+Execute:
+
+```bash
+az sql server create \
+  --name sql-server-rm563409-chilecentral \
+  --resource-group rg-sql-563409 \
+  --location chilecentral \
+  --admin-user user-563409 \
+  --admin-password "<SUA_SENHA_SQL>" \
+  --enable-public-network true
+```
+
+> **Importante:** substitua `<SUA_SENHA_SQL>` pela senha definida para o administrador do SQL Server. Não armazene a senha real no repositório GitHub.
+
+---
+
+# 5. Criar o Azure SQL Database
+
+Execute:
+
+```bash
+az sql db create \
+  --resource-group rg-sql-563409 \
+  --server sql-server-rm563409-chilecentral \
+  --name db-563409 \
+  --service-objective Basic \
+  --backup-storage-redundancy Local \
+  --zone-redundant false
+```
+
+O banco utilizado pela aplicação será:
+
+```text
+db-563409
+```
+
+---
+
+# 6. Configurar regra de Firewall
+
+Para permitir o acesso ao Azure SQL durante o desenvolvimento e os testes:
+
+```bash
+az sql server firewall-rule create \
+  --resource-group rg-sql-563409 \
+  --server sql-server-rm563409-chilecentral \
+  --name liberaGeral \
+  --start-ip-address 0.0.0.0 \
+  --end-ip-address 255.255.255.255
+```
+
+> Esta configuração libera um intervalo amplo de endereços IP e foi utilizada para fins acadêmicos e de demonstração. Em um ambiente de produção, recomenda-se restringir o acesso apenas aos endereços e serviços necessários.
+
+---
+
+# 7. Criação das tabelas
+
+A aplicação possui duas entidades relacionadas:
+
+- `category`
+- `movie`
+
+O relacionamento é de **1:N**, em que uma categoria pode possuir vários filmes e cada filme pertence a uma categoria.
+
+No PowerShell, execute:
+
+```powershell
+Invoke-Sqlcmd `
+    -ServerInstance "sql-server-rm563409-chilecentral.database.windows.net" `
+    -Database "db-563409" `
+    -Username "user-563409" `
+    -Password "<SUA_SENHA_SQL>" `
+    -Query @"
+
+IF NOT EXISTS (
+    SELECT * FROM sysobjects
+    WHERE name = 'category' AND xtype = 'U'
+)
+BEGIN
+    CREATE TABLE category (
+        id BIGINT IDENTITY(1,1) PRIMARY KEY,
+        name VARCHAR(255)
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM sysobjects
+    WHERE name = 'movie' AND xtype = 'U'
+)
+BEGIN
+    CREATE TABLE movie (
+        id BIGINT IDENTITY(1,1) PRIMARY KEY,
+        title VARCHAR(255),
+        synopsis VARCHAR(255),
+        rating INT,
+        release_date DATE,
+        category_id BIGINT,
+
+        CONSTRAINT FK_movie_category
+            FOREIGN KEY (category_id)
+            REFERENCES category(id)
+    );
+END;
+
+"@
+```
+
+Após a execução, podem ser realizadas consultas para verificar a criação das tabelas:
+
+```sql
+SELECT * FROM category;
+```
+
+```sql
+SELECT * FROM movie;
+```
+
+---
+
+# 8. Configuração da conexão JDBC
+
+A cadeia de conexão JDBC disponibilizada pelo Azure SQL possui o seguinte formato:
+
+```text
+jdbc:sqlserver://sql-server-rm563409-chilecentral.database.windows.net:1433;database=db-563409;user=<USUARIO>;password=<SENHA>;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30;
+```
+
+Na aplicação, usuário e senha não são armazenados diretamente na URL.
+
+A URL utilizada pela aplicação é:
+
+```text
+jdbc:sqlserver://sql-server-rm563409-chilecentral.database.windows.net:1433;database=db-563409;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30;
+```
+
+As credenciais são fornecidas separadamente através de variáveis de ambiente.
+
+O arquivo `application.properties` utiliza:
+
+```properties
+spring.application.name=movies
+
+spring.datasource.url=${AZURE_SQL_URL}
+spring.datasource.username=${AZURE_SQL_USERNAME}
+spring.datasource.password=${AZURE_SQL_PASSWORD}
+
+spring.datasource.driver-class-name=com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+```
+
+Dessa forma, nenhuma credencial precisa ser armazenada diretamente no código-fonte.
+
+---
+
+# 9. Criar o Azure App Service Plan
+
+No Azure Cloud Shell, execute:
+
+```bash
+az appservice plan create \
+  --name plan-movies-rm563409 \
+  --resource-group rg-sql-563409 \
+  --location chilecentral \
+  --sku B1 \
+  --is-linux
+```
+
+Para verificar o App Service Plan:
+
+```bash
+az appservice plan show \
+  --name plan-movies-rm563409 \
+  --resource-group rg-sql-563409 \
+  --output table
+```
+
+---
+
+# 10. Criar o Azure Web App
+
+Execute:
+
+```bash
+az webapp create \
+  --resource-group rg-sql-563409 \
+  --plan plan-movies-rm563409 \
+  --name movies-rm563409 \
+  --runtime "JAVA:17-java17"
+```
+
+O Web App será responsável por executar a aplicação Spring Boot.
+
+---
+
+# 11. Verificar o Web App
+
+Execute:
+
+```bash
+az webapp show \
+  --resource-group rg-sql-563409 \
+  --name movies-rm563409 \
+  --query "{name:name,state:state,host:defaultHostName,location:location}" \
+  --output table
+```
+
+Para verificar o runtime configurado:
+
+```bash
+az webapp config show \
+  --resource-group rg-sql-563409 \
+  --name movies-rm563409 \
+  --query linuxFxVersion
+```
+
+A aplicação utiliza Java 17.
+
+---
+
+# 12. Configurar as variáveis de ambiente do Azure SQL
+
+As informações de conexão com o banco são configuradas no Azure Web App através de Application Settings.
+
+Execute:
+
+```bash
+az webapp config appsettings set \
+  --resource-group rg-sql-563409 \
+  --name movies-rm563409 \
+  --settings \
+  AZURE_SQL_URL="jdbc:sqlserver://sql-server-rm563409-chilecentral.database.windows.net:1433;database=db-563409;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30;" \
+  AZURE_SQL_USERNAME="user-563409" \
+  AZURE_SQL_PASSWORD="<SUA_SENHA_SQL>"
+```
+
+As seguintes variáveis são utilizadas:
+
+```text
+AZURE_SQL_URL
+AZURE_SQL_USERNAME
+AZURE_SQL_PASSWORD
+```
+
+> A senha real não deve ser adicionada aos scripts armazenados no GitHub.
+
+Essas variáveis são lidas pelo `application.properties` durante a inicialização da aplicação.
+
+---
+
+# 13. Gerar o arquivo JAR
+
+Na máquina local, abra o terminal na raiz do projeto e execute:
+
+```bash
+mvn clean package -DskipTests
+```
+
+Caso esteja utilizando Maven Wrapper no Windows:
+
+```powershell
+.\mvnw.cmd clean package -DskipTests
+```
+
+Após a compilação, o arquivo será gerado dentro do diretório:
+
+```text
+target/
+```
+
+Exemplo:
+
+```text
+target/movies-0.0.1-SNAPSHOT.jar
+```
+
+---
+
+# 14. Autenticação no Azure CLI local
+
+Para realizar o deploy diretamente do computador onde o arquivo JAR foi gerado:
+
+```bash
+az login
+```
+
+Verifique a conta ativa:
+
+```bash
+az account show --output table
+```
+
+---
+
+# 15. Deploy da aplicação com Azure CLI
+
+Na raiz do projeto, execute:
+
+```bash
+az webapp deploy \
+  --resource-group rg-sql-563409 \
+  --name movies-rm563409 \
+  --src-path target/movies-0.0.1-SNAPSHOT.jar \
+  --type jar
+```
+
+O comando envia o arquivo JAR gerado pelo Maven para o Azure Web App.
+
+Após a conclusão do deploy, a aplicação ficará disponível através do Azure App Service.
+
+Para consultar o hostname:
+
+```bash
+az webapp show \
+  --resource-group rg-sql-563409 \
+  --name movies-rm563409 \
+  --query defaultHostName \
+  --output tsv
+```
+
+A aplicação pode ser acessada através de:
+
+```text
+https://movies-rm563409.azurewebsites.net
+```
+
+---
+
+# 16. Testar a aplicação publicada
+
+Os endpoints podem ser testados utilizando Insomnia, Postman ou outro cliente HTTP.
+
+Exemplo:
+
+```http
+GET https://movies-rm563409.azurewebsites.net/categories
+```
+
+E:
+
+```http
+GET https://movies-rm563409.azurewebsites.net/movies
+```
+
+A partir deste momento, as requisições não dependem mais da execução da aplicação em `localhost`.
+
+O fluxo passa a ser:
+
+```text
+Cliente HTTP
+    ↓
+Azure Web App
+    ↓
+Spring Boot
+    ↓
+JPA / Hibernate
+    ↓
+Azure SQL Database
+```
+
+---
+
+# 17. Criar o Application Insights
+
+Para monitorar a aplicação, crie um recurso Application Insights.
+
+No Azure Cloud Shell:
+
+```bash
+az monitor app-insights component create \
+  --app appi-movies-rm563409 \
+  --location chilecentral \
+  --resource-group rg-sql-563409 \
+  --kind web \
+  --application-type web
+```
+
+Verifique a criação:
+
+```bash
+az monitor app-insights component show \
+  --app appi-movies-rm563409 \
+  --resource-group rg-sql-563409 \
+  --query "{name:name,location:location,kind:kind}" \
+  --output table
+```
+
+---
+
+# 18. Conectar o Application Insights ao Web App
+
+Execute:
+
+```bash
+az monitor app-insights component connect-webapp \
+  --resource-group rg-sql-563409 \
+  --app appi-movies-rm563409 \
+  --web-app movies-rm563409
+```
+
+---
+
+# 19. Obter a Connection String do Application Insights
+
+No Azure Cloud Shell utilizando Bash:
+
+```bash
+AI_CONNECTION_STRING=$(az monitor app-insights component show \
+  --app appi-movies-rm563409 \
+  --resource-group rg-sql-563409 \
+  --query connectionString \
+  --output tsv)
+```
+
+Para verificar se a variável foi carregada:
+
+```bash
+echo "$AI_CONNECTION_STRING"
+```
+
+---
+
+# 20. Configurar o agente do Application Insights
+
+Configure a Connection String e o agente do Application Insights no Web App:
+
+```bash
+az webapp config appsettings set \
+  --resource-group rg-sql-563409 \
+  --name movies-rm563409 \
+  --settings \
+  APPLICATIONINSIGHTS_CONNECTION_STRING="$AI_CONNECTION_STRING" \
+  ApplicationInsightsAgent_EXTENSION_VERSION="~3"
+```
+
+---
+
+# 21. Verificar as Application Settings
+
+Para visualizar os nomes das configurações existentes:
+
+```bash
+az webapp config appsettings list \
+  --resource-group rg-sql-563409 \
+  --name movies-rm563409 \
+  --query "[].name" \
+  --output table
+```
+
+Entre as configurações deverão existir:
+
+```text
+AZURE_SQL_URL
+AZURE_SQL_USERNAME
+AZURE_SQL_PASSWORD
+APPLICATIONINSIGHTS_CONNECTION_STRING
+ApplicationInsightsAgent_EXTENSION_VERSION
+```
+
+---
+
+# 22. Reiniciar o Azure Web App
+
+Após configurar o Application Insights:
+
+```bash
+az webapp restart \
+  --resource-group rg-sql-563409 \
+  --name movies-rm563409
+```
+
+Aguarde a inicialização da aplicação e realize novas requisições HTTP para gerar telemetria.
+
+---
+
+# 23. Verificar o Application Insights
+
+No Azure Portal, acesse:
+
+```text
+Application Insights
+→ appi-movies-rm563409
+```
+
+As áreas de monitoramento podem ser utilizadas para analisar:
+
+- Requests;
+- Performance;
+- Dependencies;
+- Exceptions;
+- Traces;
+- Logs.
+
+---
+
+# 24. Arquitetura final
+
+Após a conclusão do processo, a arquitetura da solução é:
+
+<img width="1774" height="887" alt="Arquitetura Azure para API Spring Boot" src="https://github.com/user-attachments/assets/6dc9cb0f-95b3-48c1-ae28-9bf6d89c3019" />
+
+
+Todos os principais componentes da solução são executados em serviços da Microsoft Azure, enquanto as credenciais utilizadas pela aplicação são fornecidas através das configurações do Azure Web App e não ficam armazenadas diretamente no código-fonte.
