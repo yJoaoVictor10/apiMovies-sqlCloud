@@ -1,6 +1,6 @@
 # API Movies
 
-Link do vídeo: TO DO
+Link do vídeo: https://www.youtube.com/watch?v=8Hcym0CuI0E
 
 ## Descrição da Solução
 
